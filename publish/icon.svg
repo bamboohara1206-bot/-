@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">救急投与ノート</title>
+  <rect width="512" height="512" rx="96" fill="#101820"/>
+  <path d="M96 140c0-24 20-44 44-44h232c24 0 44 20 44 44v232c0 24-20 44-44 44H140c-24 0-44-20-44-44V140z" fill="#1d2b36"/>
+  <path d="M256 142v228M142 256h228" stroke="#2fb7a3" stroke-width="58" stroke-linecap="round"/>
+  <path d="M157 367h198" stroke="#f4d486" stroke-width="22" stroke-linecap="round"/>
+</svg>

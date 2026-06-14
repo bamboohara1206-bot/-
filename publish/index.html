@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ja" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101820">
+  <title>救急投与ノート</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="topbar">
+      <div>
+        <h1>救急投与ノート</h1>
+        <p class="subtitle">自分専用ローカル版</p>
+      </div>
+      <div class="header-actions" aria-label="操作">
+        <button class="icon-button" id="themeBtn" type="button" title="テーマ切替" aria-label="テーマ切替">◐</button>
+        <button class="icon-button" id="syncBtn" type="button" title="同期" aria-label="同期">⇄</button>
+        <button class="icon-button" id="exportBtn" type="button" title="JSONを書き出し" aria-label="JSONを書き出し">⇩</button>
+        <button class="icon-button" id="importBtn" type="button" title="JSONを読み込み" aria-label="JSONを読み込み">⇧</button>
+        <button class="mode-button" id="editToggle" type="button" aria-pressed="false">編集</button>
+      </div>
+    </div>
+
+    <div class="control-row">
+      <label class="search-box" for="searchInput">
+        <span aria-hidden="true">⌕</span>
+        <input id="searchInput" type="search" placeholder="薬剤名・状況・注意点で検索" autocomplete="off">
+      </label>
+      <label class="weight-box" for="weightInput">
+        <span>体重</span>
+        <input id="weightInput" type="number" inputmode="decimal" min="1" max="300" step="0.5" value="50">
+        <span>kg</span>
+      </label>
+    </div>
+
+    <div class="chip-row" id="categoryChips" aria-label="カテゴリ"></div>
+
+    <div class="edit-strip" id="editStrip" hidden>
+      <button class="primary-button" id="addScenarioBtn" type="button">＋ 状況を追加</button>
+      <button class="ghost-button" id="resetBtn" type="button">初期データへ戻す</button>
+      <span id="saveState" class="save-state" aria-live="polite"></span>
+    </div>
+  </header>
+
+  <main>
+    <div class="list-meta">
+      <span id="countText"></span>
+      <span id="storageText"></span>
+    </div>
+    <section id="scenarioList" class="scenario-list" aria-live="polite"></section>
+  </main>
+
+  <footer>
+    <strong>注意:</strong> 記載内容は自施設プロトコル、製剤、最新添付文書、患者状態に合わせて必ず確認してください。保存内容はこの端末のブラウザ内に保持されます。
+  </footer>
+
+  <dialog id="editorDialog" class="editor-dialog">
+    <form id="scenarioForm" method="dialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">メニュー編集</p>
+          <h2 id="dialogTitle">状況</h2>
+        </div>
+        <button class="icon-button" id="closeDialogBtn" type="button" title="閉じる" aria-label="閉じる">×</button>
+      </div>
+
+      <div class="form-grid">
+        <label>
+          <span>カテゴリ</span>
+          <input id="categoryField" name="category" list="categoryList" required>
+          <datalist id="categoryList"></datalist>
+        </label>
+        <label>
+          <span>状況名</span>
+          <input id="scenarioField" name="scenario" required>
+        </label>
+      </div>
+
+      <label>
+        <span>治療目標</span>
+        <textarea id="goalField" name="goal" rows="2"></textarea>
+      </label>
+
+      <label>
+        <span>ポイント</span>
+        <textarea id="pointField" name="point" rows="3"></textarea>
+      </label>
+
+      <div class="section-title">
+        <h3>薬剤・手順</h3>
+        <button class="ghost-button" id="addDrugBtn" type="button">＋ 追加</button>
+      </div>
+      <div id="drugEditor" class="drug-editor"></div>
+
+      <div class="dialog-actions">
+        <button class="ghost-button danger" id="deleteScenarioBtn" type="button">削除</button>
+        <span class="dialog-spacer"></span>
+        <button class="ghost-button" id="cancelDialogBtn" type="button">キャンセル</button>
+        <button class="primary-button" id="saveScenarioBtn" type="submit">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="syncDialog" class="editor-dialog sync-dialog">
+    <form id="syncForm" method="dialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Wi-Fi同期</p>
+          <h2>共有データ</h2>
+        </div>
+        <button class="icon-button" id="closeSyncBtn" type="button" title="閉じる" aria-label="閉じる">×</button>
+      </div>
+
+      <p class="sync-note">同じWi-Fi内でPCの同期サーバーが起動している時だけ使えます。スマホ側のデータはこの端末に残り、ボタンを押した時だけ共有データと送受信します。</p>
+
+      <label>
+        <span>同期URL</span>
+        <input id="syncUrlField" type="url" placeholder="例: http://10.32.1.55:8787/api/sync">
+      </label>
+
+      <div class="sync-actions">
+        <button class="primary-button" id="pullSyncBtn" type="button">共有から取り込む</button>
+        <button class="ghost-button" id="pushSyncBtn" type="button">この端末から共有へ保存</button>
+      </div>
+
+      <div class="sync-status" id="syncStatus" aria-live="polite"></div>
+    </form>
+  </dialog>
+
+  <input id="importFile" type="file" accept="application/json,.json" hidden>
+
+  <script src="data/default-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
