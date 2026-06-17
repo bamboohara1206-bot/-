@@ -562,6 +562,75 @@ footer {
   font-size: 12px;
 }
 
+body.auth-pending .app-header,
+body.auth-pending main,
+body.auth-pending footer {
+  visibility: hidden;
+}
+
+.auth-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: var(--bg);
+}
+
+.auth-panel {
+  width: min(100%, 380px);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+
+.auth-panel h2 {
+  margin-top: 6px;
+  font-size: 20px;
+}
+
+.auth-panel p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.auth-panel label {
+  display: grid;
+  gap: 6px;
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.auth-panel input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--field);
+  color: var(--ink);
+  padding: 9px 10px;
+  font-size: 16px;
+}
+
+.auth-panel button {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.auth-message {
+  min-height: 22px;
+  margin-top: 10px;
+  color: var(--warn-ink);
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .editor-dialog {
   width: min(920px, calc(100vw - 22px));
   max-height: min(86vh, 900px);
