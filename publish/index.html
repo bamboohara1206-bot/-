@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body class="auth-pending">
   <header class="app-header">
     <div class="topbar">
       <div>
@@ -116,11 +116,11 @@
         <button class="icon-button" id="closeSyncBtn" type="button" title="閉じる" aria-label="閉じる">×</button>
       </div>
 
-      <p class="sync-note">同じWi-Fi内でPCの同期サーバーが起動している時だけ使えます。スマホ側のデータはこの端末に残り、ボタンを押した時だけ共有データと送受信します。</p>
+      <p class="sync-note">PCの同期サーバー、またはGoogle Apps Scriptの同期URLと送受信します。スマホ側のデータはこの端末に残り、ボタンを押した時だけ共有データと同期します。</p>
 
       <label>
         <span>同期URL</span>
-        <input id="syncUrlField" type="url" placeholder="例: http://10.32.1.55:8787/api/sync">
+        <input id="syncUrlField" type="url" placeholder="例: https://script.google.com/macros/s/.../exec?key=...">
       </label>
 
       <div class="sync-actions">
@@ -135,6 +135,7 @@
   <input id="importFile" type="file" accept="application/json,.json" hidden>
 
   <script src="data/default-data.js"></script>
+  <script src="auth-config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
