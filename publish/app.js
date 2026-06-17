@@ -72,12 +72,126 @@
 
   init();
 
-  function init() {
+  async function init() {
     applyTheme(prefs.theme);
     els.weight.value = String(safeWeight(prefs.weight));
     bindEvents();
-    render();
     registerServiceWorker();
+
+    const unlocked = await authenticateIfNeeded();
+    if (!unlocked) return;
+    unlockApp();
+    render();
+  }
+
+  async function authenticateIfNeeded() {
+    const auth = window.EMERGENCY_MEDS_AUTH || {};
+    if (!auth.enabled) return true;
+
+    const sessionKey = `emergency-meds-auth:${auth.hash}`;
+    try {
+      if (sessionStorage.getItem(sessionKey) === "ok") return true;
+    } catch (error) {}
+
+    return showAuthScreen(auth, sessionKey);
+  }
+
+  function unlockApp() {
+    els.body.classList.remove("auth-pending");
+    document.querySelector(".auth-screen")?.remove();
+  }
+
+  function showAuthScreen(auth, sessionKey) {
+    return new Promise((resolve) => {
+      const screen = document.createElement("div");
+      screen.className = "auth-screen";
+      screen.innerHTML = `
+        <form class="auth-panel">
+          <p class="eyebrow">PRIVATE</p>
+          <h2>救急投与ノート</h2>
+          <p>閲覧するにはパスワードを入力してください。</p>
+          <label>
+            <span>パスワード</span>
+            <input type="password" autocomplete="current-password" required autofocus>
+          </label>
+          <button class="primary-button" type="submit">開く</button>
+          <div class="auth-message" aria-live="polite"></div>
+        </form>
+      `;
+      document.body.appendChild(screen);
+
+      const form = screen.querySelector("form");
+      const input = screen.querySelector("input");
+      const message = screen.querySelector(".auth-message");
+      setTimeout(() => input.focus(), 0);
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        message.textContent = "確認しています...";
+        const ok = await verifyPassword(input.value, auth);
+        if (ok) {
+          try {
+            sessionStorage.setItem(sessionKey, "ok");
+          } catch (error) {}
+          resolve(true);
+          return;
+        }
+        input.value = "";
+        input.focus();
+        message.textContent = "パスワードが違います。";
+      });
+    });
+  }
+
+  async function verifyPassword(password, auth) {
+    if (!password || !auth.salt || !auth.hash || !window.crypto?.subtle) return false;
+    try {
+      const encoder = new TextEncoder();
+      const keyMaterial = await crypto.subtle.importKey(
+        "raw",
+        encoder.encode(password),
+        "PBKDF2",
+        false,
+        ["deriveBits"],
+      );
+      const bits = await crypto.subtle.deriveBits(
+        {
+          name: "PBKDF2",
+          salt: base64ToBytes(auth.salt),
+          iterations: Number(auth.iterations) || 120000,
+          hash: "SHA-256",
+        },
+        keyMaterial,
+        256,
+      );
+      return safeEquals(bytesToBase64(new Uint8Array(bits)), auth.hash);
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function base64ToBytes(value) {
+    const binary = atob(value);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index++) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return bytes;
+  }
+
+  function bytesToBase64(bytes) {
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary);
+  }
+
+  function safeEquals(left, right) {
+    if (left.length !== right.length) return false;
+    let diff = 0;
+    for (let index = 0; index < left.length; index++) {
+      diff |= left.charCodeAt(index) ^ right.charCodeAt(index);
+    }
+    return diff === 0;
   }
 
   function bindEvents() {
@@ -339,9 +453,8 @@
 
     setSyncStatus("共有データを取得しています...", "");
     try {
-      const response = await fetch(url, { cache: "no-store" });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const imported = normalizeData(await response.json());
+      const raw = isGoogleScriptUrl(url) ? await getJsonp(url) : await getJson(url);
+      const imported = normalizeData(raw.payload || raw.data || raw);
       if (!imported.scenarios.length) throw new Error("No scenarios");
 
       data = imported;
@@ -349,7 +462,7 @@
       render();
       setSyncStatus(`取り込み完了: ${data.scenarios.length}件`, "ok");
     } catch (error) {
-      setSyncStatus("取り込みに失敗しました。PCとスマホが同じWi-Fiか、同期URLが正しいか確認してください。", "error");
+      setSyncStatus("取り込みに失敗しました。同期URL、Drive側の公開設定、またはPC同期サーバーを確認してください。", "error");
     }
   }
 
@@ -363,15 +476,106 @@
 
     setSyncStatus("共有データへ保存しています...", "");
     try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json; charset=utf-8" },
-        body: JSON.stringify(syncPayload()),
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (isGoogleScriptUrl(url)) {
+        await postViaForm(url, syncPayload());
+      } else {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain; charset=utf-8" },
+          body: JSON.stringify(syncPayload()),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      }
       setSyncStatus(`共有へ保存しました: ${data.scenarios.length}件`, "ok");
     } catch (error) {
-      setSyncStatus("共有への保存に失敗しました。PC側の同期サーバーが起動しているか確認してください。", "error");
+      setSyncStatus("共有への保存に失敗しました。同期URL、Drive側の公開設定、またはPC同期サーバーを確認してください。", "error");
+    }
+  }
+
+  async function getJson(url) {
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  }
+
+  function getJsonp(url) {
+    return new Promise((resolve, reject) => {
+      const callbackName = `__emergencyMedsSync${Date.now()}${Math.random().toString(36).slice(2)}`;
+      const script = document.createElement("script");
+      const src = new URL(url);
+      const timeout = window.setTimeout(() => {
+        cleanup();
+        reject(new Error("JSONP timeout"));
+      }, 20000);
+
+      function cleanup() {
+        window.clearTimeout(timeout);
+        delete window[callbackName];
+        script.remove();
+      }
+
+      window[callbackName] = (payload) => {
+        cleanup();
+        resolve(payload);
+      };
+      script.onerror = () => {
+        cleanup();
+        reject(new Error("JSONP failed"));
+      };
+      src.searchParams.set("callback", callbackName);
+      src.searchParams.set("_", Date.now().toString());
+      script.src = src.href;
+      document.body.append(script);
+    });
+  }
+
+  function postViaForm(url, payload) {
+    return new Promise((resolve, reject) => {
+      const id = `syncFrame${Date.now()}${Math.random().toString(36).slice(2)}`;
+      const iframe = document.createElement("iframe");
+      const form = document.createElement("form");
+      const input = document.createElement("textarea");
+      const timeout = window.setTimeout(() => {
+        cleanup();
+        reject(new Error("Form post timeout"));
+      }, 20000);
+      let submitted = false;
+
+      function cleanup() {
+        window.clearTimeout(timeout);
+        form.remove();
+        iframe.remove();
+      }
+
+      iframe.name = id;
+      iframe.hidden = true;
+      iframe.addEventListener("load", () => {
+        if (!submitted) return;
+        cleanup();
+        resolve();
+      });
+
+      form.method = "POST";
+      form.action = url;
+      form.target = id;
+      form.hidden = true;
+
+      input.name = "payload";
+      input.value = JSON.stringify(payload);
+      form.append(input);
+
+      document.body.append(iframe, form);
+      submitted = true;
+      form.submit();
+    });
+  }
+
+  function isGoogleScriptUrl(url) {
+    try {
+      const host = new URL(url).hostname;
+      return host.endsWith("script.google.com") || host.endsWith("googleusercontent.com");
+    } catch (error) {
+      return false;
     }
   }
 
